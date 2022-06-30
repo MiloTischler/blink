@@ -20,11 +20,7 @@ export type Frame = {
   timestamp: number | null,
   delta: number,
   alphabetIndex: number,
-  blink: {
-    rightEyeClosed: boolean
-  },
-  train: {
-    wordIndex: number,
-    charIndex: number
-  }
+  queueReset?: boolean,
+  queuePause?: boolean,
+  queuePlay?: boolean
 }

@@ -1,36 +1,49 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Text, View, VStack, HStack, Box, Button } from 'native-base';
 import { RootTabScreenProps } from '../types';
-import { Camera, CameraType } from 'expo-camera';
-import { Audio } from 'expo-av';
+import Camera from '../components/Camera';
+import { Camera as ExpoCamera } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { StyleSheet } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import _ from 'lodash';
-import AlphabetLoop from '../components/AlphabetLoop';
+import Loop from '../components/Loop';
 import { default as AlphabetRepository } from '../repositories/Alphabet';
 import { Alphabet, Word, Character, Frame } from '../types/Alphabet';
-import * as FaceDetector from 'expo-face-detector';
+
+type TrainFrame = {
+  wordIndex: number,
+  charIndex: number,
+  loop: Frame
+}
 
 export default function TrainScreen ({ navigation }: RootTabScreenProps<'Train'>) {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [currentFrame, setCurrentFrame] = useState<Frame>();
-  const [blinked, setBlinked] = useState<Number>(0);
+  const [currentFrame, setCurrentFrame] = useState<TrainFrame>({
+    wordIndex: 0,
+    charIndex: 0,
+    loop: {
+      index: 0,
+      timestamp: null,
+      delta: 300,
+      alphabetIndex: 0
+    }
+  });
   const [alphabet, setAlphabet] = useState<Alphabet>();
   const [recording, setRecording] = useState<boolean>(false);
   const [trainUid, setTrainUid] = useState<string>(`training-${Date.now()}`);
-  const camera = useRef<Camera>(null);
+  const camera = useRef<ExpoCamera>(null);
+  const loop = useRef<React.ElementRef<typeof Loop>>(null);
 
-  function getCurrentTrainingWord (frame: Frame): Word | undefined {
-    return alphabet.training.words[frame.train.wordIndex];
+  function getCurrentTrainingWord (frame: TrainFrame): Word | undefined {
+    return alphabet.training.words[frame.wordIndex];
   }
 
-  function getCurrentTrainingChar (frame: Frame): Character | undefined {
-    return alphabet.chars.find((current) => current.label === alphabet.training.words[frame.train.wordIndex].label[frame.train.charIndex]?.toLowerCase());
+  function getCurrentTrainingChar (frame: TrainFrame): Character | undefined {
+    return alphabet.chars.find((current) => current.label === alphabet.training.words[frame.wordIndex].label[frame.charIndex]?.toLowerCase());
   }
 
-  function isCurrentTraningChar (index: number, frame: Frame): boolean {
+  function isCurrentTraningChar (index: number, frame: TrainFrame): boolean {
     const currentChar = alphabet.chars[index];
 
     if (currentChar.label === getCurrentTrainingChar(frame)?.label) {
@@ -44,32 +57,32 @@ export default function TrainScreen ({ navigation }: RootTabScreenProps<'Train'>
     return `${FileSystem.cacheDirectory}${trainUid}.txt`;
   }
 
-  async function writeFrameLog (uri: string, frame: Frame) {
+  async function writeFrameLog (uri: string, frame: TrainFrame) {
     let content = '';
 
-    const alphabetChar = alphabet[frame.alphabetIndex];
+    const alphabetChar = alphabet[frame.loop.alphabetIndex];
     const trainWord = getCurrentTrainingWord(frame);
     const trainChar = getCurrentTrainingChar(frame);
 
     const entry = {
-      index: frame.index,
-      timestamp: frame.timestamp,
-      delta: frame.delta,
+      index: frame.loop.index,
+      timestamp: frame.loop.timestamp,
+      delta: frame.loop.delta,
       alphabet: {
         id: alphabetChar?.id,
         label: alphabetChar?.label,
-        index: frame.alphabetIndex
+        index: frame.loop.alphabetIndex
       },
       train: {
         word: {
           id: trainWord?.id,
           label: trainWord?.label,
-          index: frame.train.wordIndex
+          index: frame.wordIndex
         },
         char: {
           id: trainChar?.id,
           label: trainChar?.label,
-          index: frame.train.charIndex
+          index: frame.charIndex
         }
       }
     };
@@ -123,25 +136,9 @@ export default function TrainScreen ({ navigation }: RootTabScreenProps<'Train'>
     }
   }
 
-  useEffect(() => {
-    (async () => {
-      const cameraPermission = await Camera.requestCameraPermissionsAsync();
-      const audioPermission = await Audio.requestPermissionsAsync();
-      setHasPermission(cameraPermission.status === 'granted' && audioPermission.status === 'granted');
-    })();
-
-    setAlphabet(AlphabetRepository.load());
-  }, []);
-
-  // useEffect(() => {
-  //   if (recording) {
-  //     writeFrameLog(getLogUri(trainUid), currentFrame);
-  //   }
-  // }, [recording, currentFrame, trainUid]);
-
-  function beforeBackgroundColorChange (index: number, frame: Frame, color: string): string {
-    if (index === frame.alphabetIndex) {
-      const currentChar = alphabet.chars[frame.alphabetIndex];
+  function beforeBackgroundColorChange (index: number, frame: TrainFrame, color: string): string {
+    if (index === frame.loop.alphabetIndex) {
+      const currentChar = alphabet.chars[frame.loop.alphabetIndex];
 
       if (currentChar.label === getCurrentTrainingChar(frame)?.label) {
         color = "green.500";
@@ -151,80 +148,63 @@ export default function TrainScreen ({ navigation }: RootTabScreenProps<'Train'>
     return color;
   }
 
-  function beforeTextColorChange (index: number, frame: Frame, color: string): string {
+  function beforeTextColorChange (index: number, frame: TrainFrame, color: string): string {
     return isCurrentTraningChar(index, frame) ? 'red.400' : color;
   }
 
-  function beforeFrameChange (lastFrame: Frame, newFrame: Frame): Frame {
-    const lastChar = alphabet.chars[lastFrame.alphabetIndex];
-    const currentTrainingChar = getCurrentTrainingChar(lastFrame);
-
-    // jump to next char if we had a match 
-    if (currentTrainingChar && lastChar && lastChar.label === currentTrainingChar.label) {
-      newFrame.alphabetIndex = 0;
+  function onFrame (frame: Frame) {
+    if (frame.queuePause && frame.queuePause === true) {
+      return;
     }
 
-    // increase train char and word
-    if (newFrame.alphabetIndex === 0) {
-      if ((newFrame.train.charIndex + 1) < alphabet.training.words[newFrame.train.wordIndex].label.length) {
-        newFrame.train.charIndex += 1;
-      } else {
-        newFrame.train.charIndex = 0;
+    setCurrentFrame((oldTrainFrame) => {
+      const newTrainFrame = {
+        ..._.cloneDeep(oldTrainFrame),
+        loop: frame
+      };
 
-        if ((newFrame.train.wordIndex + 1) < alphabet.training.words.length) {
-          newFrame.train.wordIndex += 1;
+      // increase train char and word
+      if (newTrainFrame.loop.alphabetIndex === 0) {
+        if ((newTrainFrame.charIndex + 1) < alphabet.training.words[newTrainFrame.wordIndex].label.length) {
+          newTrainFrame.charIndex += 1;
         } else {
-          newFrame.train.wordIndex = 0;
+          newTrainFrame.charIndex = 0;
+
+          if ((newTrainFrame.wordIndex + 1) < alphabet.training.words.length) {
+            newTrainFrame.wordIndex += 1;
+          } else {
+            newTrainFrame.wordIndex = 0;
+          }
         }
       }
-    }
 
-    return newFrame;
+      return newTrainFrame;
+    })
   }
 
-  function handleFacesDetected ({ faces }) {
-    if (faces.length) {
-      if (faces.length > 1) {
-        console.warn('More than one faces visible....')
-      }
+  useEffect(() => {
+    setAlphabet(AlphabetRepository.load());
+  }, []);
 
-      const face = faces[0];
+  useEffect(() => {
+    if (alphabet) {
+      const currentChar = alphabet.chars[currentFrame.loop.alphabetIndex];
+      const currentTrainingChar = getCurrentTrainingChar(currentFrame);
 
-      if (face.rightEyeOpenProbability < 0.4) {
-        console.log('Right eye closed: We should select char', face.rightEyeOpenProbability);
-
-        setCurrentFrame((lastFrame) => {
-          const newFrame = _.cloneDeep(lastFrame);
-
-          newFrame.blink.rightEyeClosed = true;
-
-          return newFrame;
-        });
-      } else {
-        console.log(face.rightEyeOpenProbability);
-
-        setCurrentFrame((lastFrame) => {
-          const newFrame = _.cloneDeep(lastFrame);
-
-          if (lastFrame.blink.rightEyeClosed === true) {
-            setBlinked(Date.now());
-            console.log('Blinked: We should continue - "pause" until eye is opened again');
-          }
-
-          newFrame.blink.rightEyeClosed = false;
-
-          return newFrame;
-        });
+      if (currentTrainingChar && currentChar && currentChar.label === currentTrainingChar.label) {
+        loop.current.reset();
       }
     }
-  }
+  }, [currentFrame, alphabet]);
 
-  if (hasPermission === null) {
-    return <View />;
-  }
+  // useEffect(() => {
+  //   if (recording) {
+  //     writeFrameLog(getLogUri(trainUid), currentFrame);
+  //   }
+  // }, [recording, currentFrame, trainUid]);
 
-  if (hasPermission === false) {
-    return <View flex="1"><Text>No access to camera</Text></View>;
+  if (!alphabet) {
+    return <View flex="1"><Text>Loading...</Text></View>
   }
 
   return (
@@ -235,24 +215,16 @@ export default function TrainScreen ({ navigation }: RootTabScreenProps<'Train'>
       </HStack>}
       <Camera
         ref={camera}
-        style={styles.camera}
-        type={CameraType.front}
-        onFacesDetected={handleFacesDetected}
-        faceDetectorSettings={{
-          mode: FaceDetector.FaceDetectorMode.fast,
-          detectLandmarks: FaceDetector.FaceDetectorLandmarks.all,
-          runClassifications: FaceDetector.FaceDetectorClassifications.all,
-          minDetectionInterval: 100,
-          tracking: true,
-        }}
+        onBlinkRightStart={() => loop.current.pause()}
+        onBlinkRightEnd={() => loop.current.reset()}
       >
-        {alphabet && <AlphabetLoop
+        <Loop
+          ref={loop}
           alphabet={alphabet}
           speed={300}
-          onFrame={(frame) => setCurrentFrame(frame)}
-          beforeFrameChange={beforeFrameChange}
-          beforeBackgroundColorChange={beforeBackgroundColorChange}
-          beforeTextColorChange={beforeTextColorChange} />}
+          onFrame={onFrame}
+          beforeBackgroundColorChange={(index: number, frame: Frame, color: string) => beforeBackgroundColorChange(index, currentFrame, color)}
+          beforeTextColorChange={(index: number, frame: Frame, color: string) => beforeTextColorChange(index, currentFrame, color)} />
       </Camera>
       <VStack>
         {/* <Button
