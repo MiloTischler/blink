@@ -1,0 +1,156 @@
+{
+  "chars": [
+    {
+      "id": "space1",
+      "label": " "
+    },
+    {
+      "id": "space2",
+      "label": " "
+    },
+    {
+      "id": "a",
+      "label": "a"
+    },
+    {
+      "id": "b",
+      "label": "b"
+    },
+    {
+      "id": "c",
+      "label": "c"
+    },
+    {
+      "id": "d",
+      "label": "d"
+    },
+    {
+      "id": "e",
+      "label": "e"
+    },
+    {
+      "id": "f",
+      "label": "f"
+    },
+    {
+      "id": "g",
+      "label": "g"
+    },
+    {
+      "id": "h",
+      "label": "h"
+    },
+    {
+      "id": "i",
+      "label": "i"
+    },
+    {
+      "id": "j",
+      "label": "j"
+    },
+    {
+      "id": "k",
+      "label": "k"
+    },
+    {
+      "id": "l",
+      "label": "l"
+    },
+    {
+      "id": "m",
+      "label": "m"
+    },
+    {
+      "id": "n",
+      "label": "n"
+    },
+    {
+      "id": "o",
+      "label": "o"
+    },
+    {
+      "id": "p",
+      "label": "p"
+    },
+    {
+      "id": "q",
+      "label": "q"
+    },
+    {
+      "id": "r",
+      "label": "r"
+    },
+    {
+      "id": "s",
+      "label": "s"
+    },
+    {
+      "id": "t",
+      "label": "t"
+    },
+    {
+      "id": "u",
+      "label": "u"
+    },
+    {
+      "id": "v",
+      "label": "v"
+    },
+    {
+      "id": "w",
+      "label": "w"
+    },
+    {
+      "id": "x",
+      "label": "x"
+    },
+    {
+      "id": "y",
+      "label": "y"
+    },
+    {
+      "id": "z",
+      "label": "z"
+    }
+  ],
+  "training": {
+    "words": [
+      {
+        "id": "Franz",
+        "label": "Franz"
+      },
+      {
+        "id": "jagt",
+        "label": "jagt"
+      },
+      {
+        "id": "im",
+        "label": "im"
+      },
+      {
+        "id": "komplett",
+        "label": "komplett"
+      },
+      {
+        "id": "verwahrlosten",
+        "label": "verwahrlosten"
+      },
+      {
+        "id": "Taxi",
+        "label": "Taxi"
+      },
+      {
+        "id": "quer",
+        "label": "quer"
+      },
+      {
+        "id": "durch",
+        "label": "durch"
+      },
+      {
+        "id": "Bayern",
+        "label": "Bayern"
+      }
+    ]
+  }
+}
